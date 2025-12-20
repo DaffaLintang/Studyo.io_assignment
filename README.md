@@ -31,25 +31,53 @@ A Flutter application for managing and solving marble-based puzzles.
    - For Android: Connect an Android device or use an emulator, then run `flutter run`
    - For iOS: `cd ios && pod install && cd ..` then `flutter run`
 
-## Project Structure
+## Project Structure (Clean Architecture)
 
 ```
 lib/
-├── app/
+├── core/
+│   └── domain/
+│       ├── entities/
+│       │   ├── answer_check_result.dart
+│       │   └── assignment.dart
+│       └── usecases/
+│           └── check_answer_usecase.dart
+├── presentation/
 │   ├── modules/
 │   │   └── home/
 │   │       ├── bindings/
+│   │       │   └── home_binding.dart
 │   │       ├── controllers/
+│   │       │   └── home_controller.dart
 │   │       └── views/
+│   │           └── home_view.dart
 │   ├── routes/
+│   │   ├── app_pages.dart
+│   │   └── app_routes.dart
 │   └── widgets/
+│       └── widget/
+│           ├── AnswerContainer.dart
+│           ├── AppContainer.dart
+│           ├── Appbar.dart
+│           ├── AssigmentContainer.dart
+│           ├── CheckButton.dart
+│           ├── MarblePlayground.dart
+│           └── marbel.dart
 └── main.dart
 ```
+
+### Layering
+- `core/domain`: Pure business rules (entities, use cases). No dependency on UI/framework.
+- `presentation`: UI/interaction (GetX controllers, views, routes, widgets). Depends on the domain via dependency injection.
+- `infrastructure` (optional, not present yet): where datasource/repository implementations will live if needed later.
 
 ## Features
 
 - Interactive marble-based puzzle interface
-- Color-based counting and validation
+- Color-based counting and validation (Check Answer)
+- Network Radial Layout for marble cluster layout (organic, adaptive)
+- Visual connectors between marbles outside the AnswerContainer
+- Interactive animations: idle jitter, drag reaction, ripple on merge/unmerge
 - Responsive design for multiple platforms
 
 ## Dependencies

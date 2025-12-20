@@ -1,8 +1,10 @@
 import 'package:get/get.dart';
 import 'package:flutter/material.dart';
 import 'dart:math';
+import 'package:studyo_assigment01/core/domain/usecases/check_answer_usecase.dart';
 
 class HomeController extends GetxController {
+  final CheckAnswerUseCase checkAnswerUseCase;
   // Config
   static const double marbleSize = 50;
   static const double gap = 8;
@@ -28,6 +30,13 @@ class HomeController extends GetxController {
   final rectFlags = <bool>[].obs; // true => rectangle
   // Flag to indicate a DragTarget handled the drop to avoid extra snap logic
   bool _dropHandledByTarget = false;
+  // Ripple effect state (triggered on merge)
+  DateTime? _rippleStart;
+  Offset? _rippleCenter;
+
+  // Ripple public getters
+  DateTime? get rippleStart => _rippleStart;
+  Offset? get rippleCenter => _rippleCenter;
 
   // Assignments state
   final List<String> assignmentList = const [
@@ -44,6 +53,8 @@ class HomeController extends GetxController {
   static const Color answerColor1 = Color(0xffe5a882);
   static const Color answerColor2 = Color(0xffdde487);
   static const Color answerColor3 = Color(0xff82dae4);
+
+  HomeController({required this.checkAnswerUseCase});
 
   @override
   void onInit() {
@@ -73,15 +84,17 @@ class HomeController extends GetxController {
       }
       center = Offset(sumX / members.length, sumY / members.length);
     }
-    // Scatter radius
-    final rnd = Random();
-    final radius = marbleSize * 2;
-    for (int k = 0; k < members.length; k++) {
+    // Trigger ripple on unmerge so other marbles react smoothly
+    _rippleStart = DateTime.now();
+    _rippleCenter = center;
+    // Scatter deterministically on a ring so marbles don't gather at one spot
+    final n = members.length;
+    final baseR = marbleSize * (n <= 4 ? 1.6 : 2.2);
+    for (int k = 0; k < n; k++) {
       final m = members[k];
-      final theta = rnd.nextDouble() * 2 * pi;
-      final r = (radius * 0.4) + rnd.nextDouble() * (radius * 0.6);
-      final cx = center.dx + r * cos(theta);
-      final cy = center.dy + r * sin(theta);
+      final theta = (2 * pi * k) / n;
+      final cx = center.dx + baseR * cos(theta);
+      final cy = center.dy + baseR * sin(theta);
       final topLeft = Offset(cx - marbleSize / 2, cy - marbleSize / 2);
       positions[m] = _clampToBounds(topLeft);
       // Reset visuals to default
@@ -95,6 +108,16 @@ class HomeController extends GetxController {
     _clusterRectPattern.remove(root);
     fills.refresh();
     positions.refresh();
+  }
+
+  // Public: expose clusters for rendering connections
+  List<List<int>> allClusters() {
+    final Map<int, List<int>> groups = {};
+    for (int i = 0; i < positions.length; i++) {
+      final r = _find(i);
+      groups.putIfAbsent(r, () => <int>[]).add(i);
+    }
+    return groups.values.toList();
   }
 
   // Check Answer helpers
@@ -204,12 +227,13 @@ class HomeController extends GetxController {
 
   // Require each Answer Box to match its expected count per operator
   void onCheckAnswer(String assignmentText) {
-    final expected = expectedPerBox(assignmentText);
     final counts = countAnswerContainers();
-    bool correct = false;
-    if (expected != null && expected.b1 != null && expected.b2 != null && expected.b3 != null) {
-      correct = (counts.c1 == expected.b1 && counts.c2 == expected.b2 && counts.c3 == expected.b3);
-    }
+    final result = checkAnswerUseCase.execute(
+      assignmentText,
+      c1: counts.c1,
+      c2: counts.c2,
+      c3: counts.c3,
+    );
 
     Get.dialog(
       AlertDialog(
@@ -224,20 +248,18 @@ class HomeController extends GetxController {
             Text('Answer Box 2: ${counts.c2.toString()}'),
             Text('Answer Box 3: ${counts.c3.toString()}'),
             const SizedBox(height: 8),
-            if (expected != null) ...[
-              if (expected.b1 != null && counts.c1 != expected.b1)
-                const Text('Answer Box 1 wrong number of marbles', style: TextStyle(color: Colors.red)),
-              if (expected.b2 != null && counts.c2 != expected.b2)
-                const Text('Answer Box 2 wrong number of marbles', style: TextStyle(color: Colors.red)),
-              if (expected.b3 != null && counts.c3 != expected.b3)
-                const Text('Answer Box 3 wrong number of marbles', style: TextStyle(color: Colors.red)),
-              if (expected.b3 == null)
-                const Text('Division result is not an integer; cannot distribute exactly', style: TextStyle(color: Colors.red)),
-            ],
+            if (result.expectedBox1 != null && counts.c1 != result.expectedBox1)
+              const Text('Answer Box 1 wrong number of marbles', style: TextStyle(color: Colors.red)),
+            if (result.expectedBox2 != null && counts.c2 != result.expectedBox2)
+              const Text('Answer Box 2 wrong number of marbles', style: TextStyle(color: Colors.red)),
+            if (result.expectedBox3 != null && counts.c3 != result.expectedBox3)
+              const Text('Answer Box 3 wrong number of marbles', style: TextStyle(color: Colors.red)),
+            if (result.expectedBox1 == null || result.expectedBox2 == null || result.expectedBox3 == null)
+              const Text('Division result is not an integer; cannot distribute exactly', style: TextStyle(color: Colors.red)),
             const SizedBox(height: 12),
-            Text(correct ? 'Answer Correct' : 'Answer Incorrect',
+            Text(result.correct ? 'Answer Correct' : 'Answer Incorrect',
                 style: TextStyle(
-                  color: correct ? Colors.green : Colors.red,
+                  color: result.correct ? Colors.green : Colors.red,
                   fontWeight: FontWeight.bold,
                 )),
           ],
@@ -248,7 +270,7 @@ class HomeController extends GetxController {
       ),
     );
 
-    if (correct == true) {
+    if (result.correct == true) {
       _advanceAssignment();
       resetAndScatterAll();
     }
@@ -362,6 +384,9 @@ class HomeController extends GetxController {
         _clusterAnchor[root] = dropCenter;
         _reflowCluster(index);
         merged = true;
+        // Trigger ripple originating from the cluster anchor
+        _rippleStart = DateTime.now();
+        _rippleCenter = _clusterAnchor[_find(index)];
       } else {
         target = _snapToGrid(dropPos);
       }
@@ -409,20 +434,65 @@ class HomeController extends GetxController {
 
     List<Offset> generatePattern(int needed) {
       if (!useRectGrid) {
-        // Diagonal flower layered (quincunx diagonal)
+        // Special case: exactly 2 marbles should stay touching side-by-side
+        if (needed == 2) {
+          final d = marbleSize; // center-to-center distance equals marble size (touching)
+          return <Offset>[
+            Offset(-d / 2, 0),
+            Offset(d / 2, 0),
+          ];
+        }
+        // Special case: exactly 3 marbles should form an equilateral triangle touching
+        if (needed == 3) {
+          final s = marbleSize; // side length equals marble size for touching
+          final R = s / sqrt(3); // circumradius for equilateral triangle
+          return <Offset>[
+            Offset(0, -R), // top vertex
+            Offset(R * cos(pi / 6), R * sin(pi / 6)), // 30 deg
+            Offset(R * cos(5 * pi / 6), R * sin(5 * pi / 6)), // 150 deg
+          ];
+        }
+        // Special case: exactly 4 marbles should form a square touching
+        if (needed == 4) {
+          final s = marbleSize; // side length equals marble size for touching
+          final h = s / 2; // half side
+          return <Offset>[
+            Offset(-h, -h),
+            Offset(h, -h),
+            Offset(h, h),
+            Offset(-h, h),
+          ];
+        }
+        // Radial concentric rings pattern (Network Radial Layout)
         final list = <Offset>[];
-        if (needed > 0) list.add(const Offset(0, 0));
-        int placed = list.length;
-        int layer = 1;
-        while (placed < needed) {
-          final items = 4 * layer;
-          for (int i = 0; i < items && placed < needed; i++) {
-            final theta = (pi / 4) + (2 * pi * i / items);
-            final r = baseDist * layer;
+        if (needed <= 0) return list;
+        if (needed == 1) {
+          return [const Offset(0, 0)];
+        }
+        // Determine ring radii and capacities based on baseDist spacing
+        int remaining = needed;
+        int ring = 1;
+        // optionally put a center node when remaining is odd and small
+        bool useCenter = remaining % 2 == 1 && remaining <= 7;
+        if (useCenter) {
+          list.add(const Offset(0, 0));
+          remaining--;
+        }
+        while (remaining > 0) {
+          final r = baseDist * ring; // radius grows linearly per ring
+          // capacity proportional to circumference / spacing, clamp min 6 to keep balance
+          int cap = max(6, (2 * pi * r / baseDist).round());
+          // Slightly reduce cap to increase spacing overlap aesthetics
+          cap = (cap * 0.85).round().clamp(6, 9999);
+          final m = min(cap, remaining);
+          // Evenly space m items with a ring phase offset to avoid alignment between rings
+          final phase = (ring.isOdd ? pi / m : pi / (m * 2));
+          for (int i = 0; i < m; i++) {
+            final theta = phase + (2 * pi * i / m);
             list.add(Offset(r * cos(theta), r * sin(theta)));
-            placed++;
           }
-          layer++;
+          remaining -= m;
+          ring++;
         }
         return list;
       } else {
@@ -483,6 +553,13 @@ class HomeController extends GetxController {
 
   // Public helpers for DragTarget usage
   bool isMergedIndex(int index) => _clusterMembers(index).length > 1;
+
+  // Public: indices currently being dragged (cluster), empty if none
+  List<int> draggedMembers() {
+    final map = _clusterStartPositions;
+    if (isDragging.value && map != null) return map.keys.toList(growable: false);
+    return const <int>[];
+  }
 
   void applyTargetStyle(int index, Color background) {
     final members = _clusterMembers(index);

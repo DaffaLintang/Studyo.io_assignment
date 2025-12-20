@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
 import 'package:get/get.dart';
-import 'package:studyo_assigment01/app/widget/AppContainer.dart';
-import 'package:studyo_assigment01/app/widget/Appbar.dart';
-import 'package:studyo_assigment01/app/widget/AssigmentContainer.dart';
-import 'package:studyo_assigment01/app/widget/CheckButton.dart';
-import 'package:studyo_assigment01/app/widget/MarblePlayground.dart';
+import 'package:studyo_assigment01/presentation/widgets/widget/AppContainer.dart';
+import 'package:studyo_assigment01/presentation/widgets/widget/Appbar.dart';
+import 'package:studyo_assigment01/presentation/widgets/widget/AssigmentContainer.dart';
+import 'package:studyo_assigment01/presentation/widgets/widget/CheckButton.dart';
+import 'package:studyo_assigment01/presentation/widgets/widget/MarblePlayground.dart';
 
 import '../controllers/home_controller.dart';
 

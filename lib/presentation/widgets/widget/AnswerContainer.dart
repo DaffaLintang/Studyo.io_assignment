@@ -1,6 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
-import 'package:studyo_assigment01/app/modules/home/controllers/home_controller.dart';
+import 'package:studyo_assigment01/presentation/modules/home/controllers/home_controller.dart';
 
 class AnswerContainer extends StatelessWidget {
   const AnswerContainer({super.key, required this.backgroud, required this.shadow});

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:studyo_assigment01/app/modules/home/controllers/home_controller.dart';
+import 'package:studyo_assigment01/presentation/modules/home/controllers/home_controller.dart';
 
 class Checkbutton extends StatelessWidget {
   const Checkbutton({super.key, required this.assignmentText});
